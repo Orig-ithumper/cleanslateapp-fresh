@@ -1,0 +1,35 @@
+{
+  "name": "cleanslateapp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@notionhq/client": "^5.26.0",
+    "@stripe/stripe-js": "^8.6.3",
+    "next": "^14.2.35",
+    "nodemailer": "^9.0.3",
+    "pg": "^8.22.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "stripe": "^20.4.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
+    "@types/node": "^20.11.0",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.23",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.35",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.6.0"
+  }
+}
