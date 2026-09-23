@@ -14,6 +14,13 @@ const stateConfig = {
   NewYork: { fee: 95, requiresCaseNumber: true, requiresCounty: true, waiverAvailable: false },
 };
 
+const SERVICE_FEE = 225;
+
+const serviceTypeOptions = [
+  { value: "Expungement", label: "Expungement Services", fee: SERVICE_FEE },
+  { value: "Record Sealing", label: "Record Sealing Service", fee: SERVICE_FEE },
+];
+
 type Flags = {
   warrants: boolean;
   pending: boolean;
@@ -25,6 +32,7 @@ type Flags = {
 
 export default function DynamicIntakeForm() {
   const router = useRouter();
+  const [serviceType, setServiceType] = useState("");
   const [selectedState, setSelectedState] = useState("");
   const [fullName, setFullName] = useState("");
   const [dob, setDob] = useState("");
@@ -48,9 +56,14 @@ export default function DynamicIntakeForm() {
     ? stateConfig[selectedState as keyof typeof stateConfig]
     : null;
 
+  const serviceFee = serviceType ? SERVICE_FEE : 0;
+  const totalDue = (config?.fee ?? 0) + serviceFee;
+
   const handleSubmit = () => {
-    if (!selectedState || !config) return;
+    if (!serviceType || !selectedState || !config) return;
     const payload = {
+      serviceType,
+      serviceFee: String(SERVICE_FEE),
       state: selectedState,
       fee: String(config.fee),
       waiver: String(config.waiverAvailable),
@@ -82,6 +95,31 @@ export default function DynamicIntakeForm() {
         <p className="text-center text-gray-600 mb-8">
           Your answers allow us to generate state-specific expungement paperwork.
         </p>
+
+        <div className="mb-8">
+          <label className="block text-sm font-medium mb-2">Select Your Service</label>
+          <div className="space-y-2">
+            {serviceTypeOptions.map((opt) => (
+              <label
+                key={opt.value}
+                className="flex items-center justify-between gap-3 border rounded-md px-3 py-2 cursor-pointer"
+              >
+                <span className="flex items-center gap-3">
+                  <input
+                    type="radio"
+                    name="serviceType"
+                    value={opt.value}
+                    checked={serviceType === opt.value}
+                    onChange={(e) => setServiceType(e.target.value)}
+                  />
+                  {opt.label}
+                </span>
+                <span className="text-sm text-gray-600">${opt.fee}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
         <div className="mb-8">
           <label className="block text-sm font-medium mb-2">Select Your State</label>
           <select
@@ -95,16 +133,27 @@ export default function DynamicIntakeForm() {
             ))}
           </select>
           {config && (
-            <div className="mt-4 p-4 bg-indigo-50 rounded-md">
+            <div className="mt-4 p-4 bg-indigo-50 rounded-md space-y-1">
               <p className="font-semibold text-indigo-700">
                 Court Filing Fee: {config.fee === 0 ? "None" : `$${config.fee}`}
               </p>
               <p className="text-sm text-gray-700">
                 Waiver Available: {config.waiverAvailable ? "Yes" : "No"}
               </p>
+              {serviceType && (
+                <>
+                  <p className="text-sm text-gray-700">
+                    Service Fee ({serviceType}): ${serviceFee}
+                  </p>
+                  <p className="font-semibold text-indigo-700 border-t border-indigo-200 pt-1 mt-1">
+                    Total Due: ${totalDue}
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>
+
         <div className="space-y-4 mb-10">
           <h2 className="text-xl font-bold text-gray-800">Personal Information</h2>
           <input type="text" placeholder="Full Legal Name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full border rounded-md px-3 py-2" />
@@ -143,7 +192,8 @@ export default function DynamicIntakeForm() {
         )}
         <button
           onClick={handleSubmit}
-          className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg shadow"
+          disabled={!serviceType || !selectedState}
+          className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg shadow disabled:opacity-50"
         >
           Continue to Checkout
         </button>

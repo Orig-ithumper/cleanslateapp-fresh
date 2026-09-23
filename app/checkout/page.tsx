@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 type IntakePayload = {
+  serviceType: string;
+  serviceFee: string;
   state: string;
   fee: string;
   waiver: string;
@@ -108,6 +110,10 @@ function CheckoutPageInner() {
     .filter(([, value]) => value)
     .map(([key]) => key.replace(/([A-Z])/g, " $1").trim());
 
+  const courtFee = Number(data.fee) || 0;
+  const serviceFee = Number(data.serviceFee) || 0;
+  const totalDue = courtFee + serviceFee;
+
   return (
     <main className="min-h-screen bg-gray-50 py-10 px-4">
       <div className="max-w-2xl mx-auto bg-white shadow-md rounded-lg p-8">
@@ -121,12 +127,18 @@ function CheckoutPageInner() {
         <section className="mb-8">
           <h2 className="text-lg font-bold text-gray-800 mb-3">State &amp; Filing</h2>
           <dl className="grid grid-cols-2 gap-y-2 text-sm">
+            <dt className="text-gray-500">Service</dt>
+            <dd>{data.serviceType || "—"}</dd>
             <dt className="text-gray-500">State</dt>
             <dd>{data.state}</dd>
-            <dt className="text-gray-500">Filing Fee</dt>
-            <dd>{data.fee === "0" ? "None" : "$" + data.fee}</dd>
+            <dt className="text-gray-500">Court Filing Fee</dt>
+            <dd>{courtFee === 0 ? "None" : "$" + courtFee.toFixed(2)}</dd>
             <dt className="text-gray-500">Waiver Available</dt>
             <dd>{data.waiver === "true" ? "Yes" : "No"}</dd>
+            <dt className="text-gray-500">Service Fee</dt>
+            <dd>${serviceFee.toFixed(2)}</dd>
+            <dt className="text-gray-700 font-semibold border-t pt-2 mt-1">Total Due</dt>
+            <dd className="font-semibold border-t pt-2 mt-1">${totalDue.toFixed(2)}</dd>
           </dl>
         </section>
 
@@ -179,11 +191,7 @@ function CheckoutPageInner() {
           disabled={submitting}
           onClick={handleSubmit}
         >
-          {submitting
-            ? "Processing…"
-            : data.fee === "0"
-              ? "Submit (No Fee)"
-              : "Pay $" + data.fee + " & Submit"}
+          {submitting ? "Processing…" : "Pay $" + totalDue.toFixed(2) + " & Submit"}
         </button>
       </div>
     </main>
