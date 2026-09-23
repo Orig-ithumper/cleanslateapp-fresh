@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("Notion write failed during checkout submission", err);
     return NextResponse.json(
-      { error: "We couldn't save your intake record. Please try again shortly." },
+      { error: "We couldn't save your intake record. Please try again shortly.", debug: String((err as Error)?.message || err) },
       { status: 502 }
     );
   }
