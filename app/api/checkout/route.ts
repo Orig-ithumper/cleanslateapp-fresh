@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
         Disposition: { rich_text: [{ text: { content: payload.disposition } }] },
         "Service Type": { select: { name: payload.serviceType } },
         "Service Fee": { number: serviceFeeAmount },
-        Fee: { number: courtFeeAmount },
+        "Filing Fee": { number: courtFeeAmount },
         "Waiver Available": { checkbox: payload.waiver === "true" },
         Flags: { rich_text: [{ text: { content: activeFlags || "None" } }] },
         "Payment Status": {
