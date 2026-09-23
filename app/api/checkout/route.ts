@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("Notion write failed during checkout submission", err);
     return NextResponse.json(
-      { error: "We couldn't save your intake record. Please try again shortly.", debug: String((err as Error)?.message || err) },
+      { error: "We couldn't save your intake record. Please try again shortly." },
       { status: 502 }
     );
   }
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("Stripe checkout session creation failed", err);
     return NextResponse.json(
-      { error: "Your intake was saved, but payment setup failed. Please contact support.", debug: String((err as Error)?.message || err) },
+      { error: "Your intake was saved, but payment setup failed. Please contact support." },
       { status: 502 }
     );
   }
