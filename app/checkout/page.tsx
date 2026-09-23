@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 type IntakePayload = {
@@ -19,7 +19,7 @@ type IntakePayload = {
   flags: Record<string, boolean>;
 };
 
-export default function CheckoutPage() {
+function CheckoutPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [data, setData] = useState<IntakePayload | null>(null);
@@ -32,12 +32,11 @@ export default function CheckoutPage() {
     if (hasLoaded.current) return;
     hasLoaded.current = true;
 
-         const token = searchParams.get("token");
+    const token = searchParams.get("token");
     if (!token) {
       setNotFound(true);
       return;
     }
-    
 
     const raw = sessionStorage.getItem("intake:" + token);
     if (!raw) {
@@ -188,5 +187,17 @@ export default function CheckoutPage() {
         </button>
       </div>
     </main>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-gray-50 py-10 px-4">Loading…</main>
+      }
+    >
+      <CheckoutPageInner />
+    </Suspense>
   );
 }
