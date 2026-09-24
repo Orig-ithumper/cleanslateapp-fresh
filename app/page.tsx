@@ -14,11 +14,31 @@ const stateConfig = {
   NewYork: { fee: 95, requiresCaseNumber: true, requiresCounty: true, waiverAvailable: false },
 };
 
-const SERVICE_FEE = 225;
-
 const serviceTypeOptions = [
-  { value: "Expungement", label: "Expungement Services", fee: SERVICE_FEE },
-  { value: "Record Sealing", label: "Record Sealing Service", fee: SERVICE_FEE },
+  {
+    value: "Expungement",
+    label: "Expungement",
+    fee: 249,
+    description: "Complete packet + county-specific forms + filing instructions.",
+  },
+  {
+    value: "Record Sealing",
+    label: "Record Sealing",
+    fee: 249,
+    description: "For eligible arrests or cases that didn't result in conviction.",
+  },
+  {
+    value: "Felony Reduction (17(b))",
+    label: "Felony Reduction (17(b))",
+    fee: 149,
+    description: "Reduce eligible felonies to misdemeanors.",
+  },
+  {
+    value: "Early Termination of Probation",
+    label: "Early Termination of Probation",
+    fee: 149,
+    description: "Shorten probation and unlock opportunities sooner.",
+  },
 ];
 
 type Flags = {
@@ -56,14 +76,15 @@ export default function DynamicIntakeForm() {
     ? stateConfig[selectedState as keyof typeof stateConfig]
     : null;
 
-  const serviceFee = serviceType ? SERVICE_FEE : 0;
+  const selectedService = serviceTypeOptions.find((s) => s.value === serviceType) || null;
+  const serviceFee = selectedService ? selectedService.fee : 0;
   const totalDue = (config?.fee ?? 0) + serviceFee;
 
   const handleSubmit = () => {
     if (!serviceType || !selectedState || !config) return;
     const payload = {
       serviceType,
-      serviceFee: String(SERVICE_FEE),
+      serviceFee: String(serviceFee),
       state: selectedState,
       fee: String(config.fee),
       waiver: String(config.waiverAvailable),
@@ -102,19 +123,23 @@ export default function DynamicIntakeForm() {
             {serviceTypeOptions.map((opt) => (
               <label
                 key={opt.value}
-                className="flex items-center justify-between gap-3 border rounded-md px-3 py-2 cursor-pointer"
+                className="flex items-start justify-between gap-3 border rounded-md px-3 py-3 cursor-pointer"
               >
-                <span className="flex items-center gap-3">
+                <span className="flex items-start gap-3">
                   <input
                     type="radio"
                     name="serviceType"
                     value={opt.value}
                     checked={serviceType === opt.value}
                     onChange={(e) => setServiceType(e.target.value)}
+                    className="mt-1"
                   />
-                  {opt.label}
+                  <span>
+                    <span className="block font-medium">{opt.label}</span>
+                    <span className="block text-sm text-gray-500">{opt.description}</span>
+                  </span>
                 </span>
-                <span className="text-sm text-gray-600">${opt.fee}</span>
+                <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">${opt.fee}</span>
               </label>
             ))}
           </div>
@@ -140,10 +165,10 @@ export default function DynamicIntakeForm() {
               <p className="text-sm text-gray-700">
                 Waiver Available: {config.waiverAvailable ? "Yes" : "No"}
               </p>
-              {serviceType && (
+              {selectedService && (
                 <>
                   <p className="text-sm text-gray-700">
-                    Service Fee ({serviceType}): ${serviceFee}
+                    Service Fee ({selectedService.label}): ${serviceFee}
                   </p>
                   <p className="font-semibold text-indigo-700 border-t border-indigo-200 pt-1 mt-1">
                     Total Due: ${totalDue}
