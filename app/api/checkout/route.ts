@@ -38,6 +38,128 @@ function isIntakePayload(value: unknown): value is IntakePayload {
   );
 }
 
+/**
+ * Best-effort fetch with a timeout. Never throws - callers decide what "best
+ * effort" means for their step (log and continue).
+ */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = 5000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Server-to-server sync into the filing engine backend (case-master-api on
+ * Railway), authenticated via SERVICE_TOKEN per the platform's security
+ * architecture (JWT for users, SERVICE_TOKEN for trusted backend callers).
+ *
+ * This is intentionally non-fatal to checkout: if CASE_MASTER_API_URL /
+ * SERVICE_TOKEN aren't configured, or the backend call fails, the client's
+ * payment flow still completes - the Notion record and Stripe session are
+ * the source of truth for the transaction. Any sync failure here is logged
+ * so it's visible in Vercel logs, never surfaced to the client.
+ *
+ * NOTE: filing creation will return 422 "county not configured" for any
+ * county that hasn't had real court routing data entered via
+ * POST /filing/counties on the backend yet. That's expected and logged,
+ * not an error in this code - it starts succeeding automatically once each
+ * county is configured with real data.
+ */
+async function syncToFilingEngine(params: {
+  recordId: string;
+  payload: IntakePayload;
+  courtFeeAmount: number;
+}): Promise<void> {
+  const baseUrl = process.env.CASE_MASTER_API_URL;
+  const serviceToken = process.env.SERVICE_TOKEN;
+
+  if (!baseUrl || !serviceToken) {
+    console.warn(
+      "[checkout] CASE_MASTER_API_URL / SERVICE_TOKEN not configured - skipping filing engine sync"
+    );
+    return;
+  }
+
+  const { recordId, payload, courtFeeAmount } = params;
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Service-Token": serviceToken,
+  };
+
+  let intakeId: number | null = null;
+  try {
+    const res = await fetchWithTimeout(`${baseUrl}/intake/`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: payload.fullName,
+        email: payload.email,
+        phone: payload.phone,
+        answers: {
+          notionRecordId: recordId,
+          serviceType: payload.serviceType,
+          state: payload.state,
+          county: payload.county,
+          caseNumber: payload.caseNumber,
+          year: payload.year,
+          charge: payload.charge,
+          disposition: payload.disposition,
+          dob: payload.dob,
+          waiver: payload.waiver,
+          flags: payload.flags,
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      console.error(
+        `[checkout] Filing engine /intake/ sync failed (${res.status}):`,
+        await res.text().catch(() => "")
+      );
+      return;
+    }
+
+    const intake = (await res.json()) as { id: number };
+    intakeId = intake.id;
+  } catch (err) {
+    console.error("[checkout] Filing engine /intake/ sync error:", err);
+    return;
+  }
+
+  try {
+    const res = await fetchWithTimeout(`${baseUrl}/filing/`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        intake_id: intakeId,
+        case_type: payload.serviceType,
+        county: payload.county,
+        court_filing_fee: courtFeeAmount,
+        fee_waiver_requested: payload.waiver === "true",
+      }),
+    });
+
+    if (!res.ok) {
+      // Expected until each county is configured with real court data via
+      // POST /filing/counties - not an error worth alarming on.
+      console.warn(
+        `[checkout] Filing engine /filing/ creation not completed (${res.status}):`,
+        await res.text().catch(() => "")
+      );
+    }
+  } catch (err) {
+    console.error("[checkout] Filing engine /filing/ sync error:", err);
+  }
+}
+
 export async function POST(req: NextRequest) {
   let body: unknown;
   try {
@@ -104,6 +226,10 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
+
+  // Best-effort sync into the secured filing engine backend. Never blocks or
+  // fails checkout - see syncToFilingEngine's doc comment.
+  await syncToFilingEngine({ recordId, payload, courtFeeAmount });
 
   let checkoutUrl: string | null = null;
   try {
