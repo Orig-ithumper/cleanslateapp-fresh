@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import LegalDisclosure from "../components/legal-disclosure";
 
 type IntakePayload = {
   serviceType: string;
@@ -92,7 +93,7 @@ function CheckoutPageInner() {
             tab. Please start over from the intake form.
           </p>
           <button
-            onClick={() => router.push("/state-status")}
+            onClick={() => router.push("/")}
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-3 rounded-lg shadow"
           >
             Back to Intake Form
@@ -183,6 +184,7 @@ function CheckoutPageInner() {
           </section>
         )}
 
+        <LegalDisclosure className="mb-4" />
         {submitError && (
           <p className="text-red-600 text-sm mb-3">{submitError}</p>
         )}
@@ -193,6 +195,12 @@ function CheckoutPageInner() {
         >
           {submitting ? "Processing…" : "Pay $" + totalDue.toFixed(2) + " & Submit"}
         </button>
+        <p className="mt-3 text-xs text-gray-500 text-center">
+          By clicking Pay &amp; Submit you agree to our{" "}
+          <a href="/terms" className="underline">Terms of Service</a> and{" "}
+          <a href="/privacy" className="underline">Privacy Policy</a>, and acknowledge that
+          My-Clean-Slate is not a law firm and does not provide legal advice.
+        </p>
       </div>
     </main>
   );

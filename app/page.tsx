@@ -2,16 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import LegalDisclosure from "./components/legal-disclosure";
 
 const stateConfig = {
+  // My-Clean-Slate prepares documents for California superior courts only.
   California: { fee: 120, requiresCaseNumber: true, requiresCounty: true, waiverAvailable: true },
-  Pennsylvania: { fee: 0, requiresCaseNumber: true, requiresCounty: false, waiverAvailable: false },
-  Texas: { fee: 100, requiresCaseNumber: true, requiresCounty: true, waiverAvailable: false },
-  Michigan: { fee: 0, requiresCaseNumber: true, requiresCounty: true, waiverAvailable: false },
-  Florida: { fee: 100, requiresCaseNumber: true, requiresCounty: true, waiverAvailable: false },
-  Utah: { fee: 0, requiresCaseNumber: true, requiresCounty: false, waiverAvailable: false },
-  Oregon: { fee: 75, requiresCaseNumber: true, requiresCounty: true, waiverAvailable: true },
-  NewYork: { fee: 95, requiresCaseNumber: true, requiresCounty: true, waiverAvailable: false },
 };
 
 const serviceTypeOptions = [
@@ -53,6 +48,7 @@ type Flags = {
 export default function DynamicIntakeForm() {
   const router = useRouter();
   const [serviceType, setServiceType] = useState("");
+  const [acknowledged, setAcknowledged] = useState(false);
   const [selectedState, setSelectedState] = useState("");
   const [fullName, setFullName] = useState("");
   const [dob, setDob] = useState("");
@@ -81,7 +77,7 @@ export default function DynamicIntakeForm() {
   const totalDue = (config?.fee ?? 0) + serviceFee;
 
   const handleSubmit = () => {
-    if (!serviceType || !selectedState || !config) return;
+    if (!serviceType || !selectedState || !config || !acknowledged) return;
     const payload = {
       serviceType,
       serviceFee: String(serviceFee),
@@ -114,8 +110,9 @@ export default function DynamicIntakeForm() {
           Expungement Intake Form
         </h1>
         <p className="text-center text-gray-600 mb-8">
-          Your answers allow us to generate state-specific expungement paperwork.
+          Your answers allow us to generate county-specific California record-relief paperwork.
         </p>
+        <LegalDisclosure variant="banner" className="mb-8" />
 
         <div className="mb-8">
           <label className="block text-sm font-medium mb-2">Select Your Service</label>
@@ -147,6 +144,7 @@ export default function DynamicIntakeForm() {
 
         <div className="mb-8">
           <label className="block text-sm font-medium mb-2">Select Your State</label>
+          <p className="text-xs text-gray-500 mb-2">We currently serve California only (all 58 counties).</p>
           <select
             value={selectedState}
             onChange={(e) => setSelectedState(e.target.value)}
@@ -215,9 +213,26 @@ export default function DynamicIntakeForm() {
             ))}
           </div>
         )}
+        <label className="flex items-start gap-3 mb-6 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={acknowledged}
+            onChange={(e) => setAcknowledged(e.target.checked)}
+            className="mt-1"
+            aria-describedby="ack-help"
+          />
+          <span id="ack-help">
+            I understand that My-Clean-Slate is an automated document generation system, not a
+            law firm; that it does not provide legal advice; and that no attorney-client
+            relationship is created. I have read the{" "}
+            <a href="/terms" className="underline" target="_blank" rel="noopener noreferrer">Terms of Service</a>{" "}
+            and{" "}
+            <a href="/privacy" className="underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+          </span>
+        </label>
         <button
           onClick={handleSubmit}
-          disabled={!serviceType || !selectedState}
+          disabled={!serviceType || !selectedState || !acknowledged}
           className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg shadow disabled:opacity-50"
         >
           Continue to Checkout
