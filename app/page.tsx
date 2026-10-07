@@ -7,6 +7,7 @@ import {
   californiaConfig,
   californiaCounties,
   isAdultDateOfBirth,
+  isValidEmail,
   serviceFees,
 } from "../lib/intake-config";
 
@@ -79,7 +80,7 @@ export default function DynamicIntakeForm() {
       selectedService &&
       config &&
       acknowledged &&
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
+      isValidEmail(email.trim()) &&
       fullName.trim() &&
       isAdultDateOfBirth(dob) &&
       caseNumber.trim() &&

@@ -5,6 +5,7 @@ import {
   californiaConfig,
   californiaCounties,
   isAdultDateOfBirth,
+  isValidEmail,
   serviceFees,
   type ServiceType,
 } from "../../../lib/intake-config";
@@ -215,7 +216,7 @@ export async function POST(req: NextRequest) {
     !county ||
     !payload.fullName.trim() ||
     !isAdultDateOfBirth(payload.dob) ||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email.trim()) ||
+    !isValidEmail(payload.email.trim()) ||
     !payload.caseNumber.trim() ||
     !/^(19\d{2}|20\d{2})$/.test(payload.year) ||
     Number(payload.year) > currentYear ||

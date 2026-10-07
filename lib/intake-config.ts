@@ -50,3 +50,22 @@ export function isAdultDateOfBirth(value: string, now = new Date()): boolean {
   }
   return age >= 18;
 }
+
+export function isValidEmail(value: string): boolean {
+  if (!value || value.trim() !== value || /\s/.test(value)) return false;
+  const separator = value.indexOf("@");
+  if (separator <= 0 || separator !== value.lastIndexOf("@")) return false;
+
+  const local = value.slice(0, separator);
+  const domain = value.slice(separator + 1);
+  const finalDot = domain.lastIndexOf(".");
+  return (
+    local.length <= 64 &&
+    domain.length <= 253 &&
+    finalDot > 0 &&
+    finalDot < domain.length - 1 &&
+    !domain.includes("..") &&
+    !local.startsWith(".") &&
+    !local.endsWith(".")
+  );
+}
