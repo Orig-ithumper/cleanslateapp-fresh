@@ -18,7 +18,8 @@ export default function PrivacyPage() {
         <ul>
           <li>
             <strong>Intake details you enter:</strong> name, date of birth, email, phone, case
-            number, county, year, charge, disposition and eligibility answers.
+            number, county, year, charge, disposition, eligibility answers, and your legal
+            disclosure acknowledgement.
           </li>
           <li>
             <strong>Payment information:</strong> processed by Stripe. We never see or store

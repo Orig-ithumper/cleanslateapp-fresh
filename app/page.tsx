@@ -79,12 +79,13 @@ export default function DynamicIntakeForm() {
       selectedService &&
       config &&
       acknowledged &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
       fullName.trim() &&
       isAdultDateOfBirth(dob) &&
-      email.trim() &&
       caseNumber.trim() &&
       county &&
-      year.trim() &&
+      Number(year) >= 1900 &&
+      Number(year) <= new Date().getUTCFullYear() &&
       charge.trim() &&
       disposition.trim()
     );
@@ -97,10 +98,7 @@ export default function DynamicIntakeForm() {
         : Math.random().toString(36).slice(2) + Date.now().toString(36);
     const payload = {
       serviceType,
-      serviceFee: String(serviceFee),
       state: selectedState,
-      fee: String(config.filingFee),
-      waiver: String(config.waiverAvailable),
       fullName,
       dob,
       email,
@@ -159,7 +157,7 @@ export default function DynamicIntakeForm() {
 
         <div className="mb-8">
           <label className="block text-sm font-medium mb-2">Select Your State</label>
-          <p className="text-xs text-gray-500 mb-2">We currently serve California only.</p>
+          <p className="text-xs text-gray-500 mb-2">We currently serve California only. Checkout is available only for counties with an active filing workflow.</p>
           <select
             value={selectedState}
             onChange={(e) => setSelectedState(e.target.value)}

@@ -57,7 +57,7 @@ CASE_MASTER_API_URL=
 SERVICE_TOKEN=
 
 `NEXT_PUBLIC_BASE_URL` must be the absolute HTTPS origin used for Stripe return
-URLs (for example, the production Vercel domain). Set all six variables in the
+URLs (for example, the production Vercel domain). Set all seven variables in the
 Vercel project and in `.env.local` for local development. Checkout is deliberately
 unavailable unless Notion, Stripe, and the authenticated case-master API are
 configured.
@@ -65,8 +65,8 @@ configured.
 The Notion database must contain the properties used by the checkout API:
 Name, Email, Phone, State, DOB, Case Number, County, Year, Charge, Disposition,
 Service Type, Service Fee, Filing Fee, Waiver Available, Flags, Legal
-Acknowledged (checkbox), Legal Acknowledged At (date), and Payment Status
-(including the Pending and Paid select options). A payment is not created unless
+Acknowledged (checkbox), Legal Acknowledged At (date), Intake Token (rich text),
+and Payment Status (including the Pending and Paid select options). A payment is not created unless
 the case-master API successfully creates the intake and filing for the selected
 county. Configure county routing in that API before offering checkout for it.
 
@@ -106,7 +106,7 @@ Confirmation page
 Payment workflow
 Production deployment preparation
 Planned:
- 
+
 Enhanced intake automation
 Additional state-specific workflows
 Administrative dashboard
@@ -186,5 +186,3 @@ License
 Proprietary Software
 
 Copyright © 2026 My Clean Slate LLC. All rights reserved.
-
-

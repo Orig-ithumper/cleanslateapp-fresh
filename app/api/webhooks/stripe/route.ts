@@ -4,10 +4,14 @@ import { Client } from "@notionhq/client";
 
 export const runtime = "nodejs";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-const notion = new Client({ auth: process.env.NOTION_API_KEY });
-
 export async function POST(req: NextRequest) {
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const notionApiKey = process.env.NOTION_API_KEY;
+  if (!stripeSecretKey || !webhookSecret || !notionApiKey) {
+    return NextResponse.json({ error: "Webhook is not configured" }, { status: 503 });
+  }
+
   const body = await req.text();
   const signature = req.headers.get("stripe-signature");
 
@@ -17,11 +21,8 @@ export async function POST(req: NextRequest) {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
+    const stripe = new Stripe(stripeSecretKey);
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
   } catch (err) {
     console.error("Webhook signature verification failed", err);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
 
     if (recordId) {
       try {
+        const notion = new Client({ auth: notionApiKey });
         await notion.pages.update({
           page_id: recordId,
           properties: {

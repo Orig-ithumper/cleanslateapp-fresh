@@ -3,13 +3,15 @@
 import { Suspense, useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import LegalDisclosure from "../components/legal-disclosure";
+import {
+  californiaConfig,
+  serviceFees,
+  type ServiceType,
+} from "../../lib/intake-config";
 
 type IntakePayload = {
   serviceType: string;
-  serviceFee: string;
   state: string;
-  fee: string;
-  waiver: string;
   fullName: string;
   dob: string;
   email: string;
@@ -61,13 +63,21 @@ function CheckoutPageInner() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const res = await fetch("/api/checkout", {
+      const recordId = sessionStorage.getItem(`intake-record:${data.intakeToken}`);
+      const endpoint = recordId ? "/api/checkout/retry" : "/api/checkout";
+      const body = recordId
+        ? { recordId, intakeToken: data.intakeToken }
+        : data;
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(body),
       });
 
       const result = await res.json();
+      if (result.recordId) {
+        sessionStorage.setItem(`intake-record:${data.intakeToken}`, result.recordId);
+      }
 
       if (!res.ok) {
         setSubmitError(result.error ?? "Submission failed. Please try again.");
@@ -77,7 +87,7 @@ function CheckoutPageInner() {
       if (result.checkoutUrl) {
         window.location.href = result.checkoutUrl;
       } else {
-        router.push("/confirmation?id=" + result.recordId);
+        setSubmitError("Checkout could not be started. Please try again.");
       }
     } catch {
       setSubmitError("Network error — please try again.");
@@ -116,8 +126,8 @@ function CheckoutPageInner() {
     .filter(([, value]) => value)
     .map(([key]) => key.replace(/([A-Z])/g, " $1").trim());
 
-  const courtFee = Number(data.fee) || 0;
-  const serviceFee = Number(data.serviceFee) || 0;
+  const courtFee = californiaConfig.filingFee;
+  const serviceFee = serviceFees[data.serviceType as ServiceType] ?? 0;
   const totalDue = courtFee + serviceFee;
 
   return (
@@ -143,9 +153,9 @@ function CheckoutPageInner() {
             <dt className="text-gray-500">State</dt>
             <dd>{data.state}</dd>
             <dt className="text-gray-500">Court Filing Fee</dt>
-            <dd>{courtFee === 0 ? "None" : "$" + courtFee.toFixed(2)}</dd>
+            <dd>${courtFee.toFixed(2)}</dd>
             <dt className="text-gray-500">Waiver Available</dt>
-            <dd>{data.waiver === "true" ? "Yes" : "No"}</dd>
+            <dd>{californiaConfig.waiverAvailable ? "Yes" : "No"}</dd>
             <dt className="text-gray-500">Service Fee</dt>
             <dd>${serviceFee.toFixed(2)}</dd>
             <dt className="text-gray-700 font-semibold border-t pt-2 mt-1">Total Due</dt>

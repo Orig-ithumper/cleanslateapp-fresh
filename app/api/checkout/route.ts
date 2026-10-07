@@ -65,7 +65,10 @@ function isIntakePayload(value: unknown): value is IntakePayload {
   }
 
   const flags = v.flags as Record<string, unknown>;
-  return flagNames.every((name) => typeof flags[name] === "boolean");
+  return (
+    Object.keys(flags).every((name) => flagNames.includes(name)) &&
+    flagNames.every((name) => typeof flags[name] === "boolean")
+  );
 }
 
 async function fetchWithTimeout(
@@ -233,8 +236,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const notion = new Client({ auth: env.notionApiKey });
-  const stripe = new Stripe(env.stripeSecretKey);
+  let notion: Client;
+  let stripe: Stripe;
+  try {
+    notion = new Client({ auth: env.notionApiKey });
+    stripe = new Stripe(env.stripeSecretKey);
+  } catch (err) {
+    console.error("[checkout] Could not initialize payment services:", err);
+    return NextResponse.json(
+      { error: "Checkout is temporarily unavailable. Please contact support." },
+      { status: 503 }
+    );
+  }
   const serviceFeeAmount = serviceFees[payload.serviceType];
   const courtFeeAmount = californiaConfig.filingFee;
   const totalAmount = courtFeeAmount + serviceFeeAmount;
@@ -265,6 +278,7 @@ export async function POST(req: NextRequest) {
         Flags: { rich_text: [{ text: { content: activeFlags || "None" } }] },
         "Legal Acknowledged": { checkbox: true },
         "Legal Acknowledged At": { date: { start: new Date().toISOString() } },
+        "Intake Token": { rich_text: [{ text: { content: payload.intakeToken } }] },
         "Payment Status": { select: { name: "Pending" } },
       },
     });
@@ -329,7 +343,10 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("Stripe checkout session creation failed", err);
     return NextResponse.json(
-      { error: "Your intake was saved, but payment setup failed. Please contact support." },
+      {
+        error: "Your intake was saved, but payment setup failed. Please try again.",
+        recordId,
+      },
       { status: 502 }
     );
   }

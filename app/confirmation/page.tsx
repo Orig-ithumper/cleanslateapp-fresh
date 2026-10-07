@@ -6,7 +6,10 @@ import LegalDisclosure from "../components/legal-disclosure";
 export default function ConfirmationPage() {
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("token");
-    if (token) sessionStorage.removeItem(`intake:${token}`);
+    if (token) {
+      sessionStorage.removeItem(`intake:${token}`);
+      sessionStorage.removeItem(`intake-record:${token}`);
+    }
   }, []);
 
   return (
