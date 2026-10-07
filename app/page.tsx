@@ -3,35 +3,36 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import LegalDisclosure from "./components/legal-disclosure";
-
-const stateConfig = {
-  // My-Clean-Slate prepares documents for California superior courts only.
-  California: { fee: 120, requiresCaseNumber: true, requiresCounty: true, waiverAvailable: true },
-};
+import {
+  californiaConfig,
+  californiaCounties,
+  isAdultDateOfBirth,
+  serviceFees,
+} from "../lib/intake-config";
 
 const serviceTypeOptions = [
   {
     value: "Expungement",
     label: "Expungement",
-    fee: 249,
+    fee: serviceFees.Expungement,
     description: "Complete packet + county-specific forms + filing instructions.",
   },
   {
     value: "Record Sealing",
     label: "Record Sealing",
-    fee: 249,
+    fee: serviceFees["Record Sealing"],
     description: "For eligible arrests or cases that didn't result in conviction.",
   },
   {
     value: "Felony Reduction (17(b))",
     label: "Felony Reduction (17(b))",
-    fee: 149,
+    fee: serviceFees["Felony Reduction (17(b))"],
     description: "Reduce eligible felonies to misdemeanors.",
   },
   {
     value: "Early Termination of Probation",
     label: "Early Termination of Probation",
-    fee: 149,
+    fee: serviceFees["Early Termination of Probation"],
     description: "Shorten probation and unlock opportunities sooner.",
   },
 ];
@@ -68,21 +69,37 @@ export default function DynamicIntakeForm() {
     violentOffense: false,
   });
 
-  const config = selectedState
-    ? stateConfig[selectedState as keyof typeof stateConfig]
-    : null;
+  const config = selectedState === californiaConfig.state ? californiaConfig : null;
 
   const selectedService = serviceTypeOptions.find((s) => s.value === serviceType) || null;
   const serviceFee = selectedService ? selectedService.fee : 0;
-  const totalDue = (config?.fee ?? 0) + serviceFee;
+  const totalDue = (config?.filingFee ?? 0) + serviceFee;
+  const canContinue =
+    Boolean(
+      selectedService &&
+      config &&
+      acknowledged &&
+      fullName.trim() &&
+      isAdultDateOfBirth(dob) &&
+      email.trim() &&
+      caseNumber.trim() &&
+      county &&
+      year.trim() &&
+      charge.trim() &&
+      disposition.trim()
+    );
 
   const handleSubmit = () => {
-    if (!serviceType || !selectedState || !config || !acknowledged) return;
+    if (!canContinue || !selectedService || !config) return;
+    const token =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36);
     const payload = {
       serviceType,
       serviceFee: String(serviceFee),
       state: selectedState,
-      fee: String(config.fee),
+      fee: String(config.filingFee),
       waiver: String(config.waiverAvailable),
       fullName,
       dob,
@@ -94,11 +111,9 @@ export default function DynamicIntakeForm() {
       charge,
       disposition,
       flags,
+      acknowledged,
+      intakeToken: token,
     };
-    const token =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2) + Date.now().toString(36);
     sessionStorage.setItem(`intake:${token}`, JSON.stringify(payload));
     router.push(`/checkout?token=${token}`);
   };
@@ -144,21 +159,19 @@ export default function DynamicIntakeForm() {
 
         <div className="mb-8">
           <label className="block text-sm font-medium mb-2">Select Your State</label>
-          <p className="text-xs text-gray-500 mb-2">We currently serve California only (all 58 counties).</p>
+          <p className="text-xs text-gray-500 mb-2">We currently serve California only.</p>
           <select
             value={selectedState}
             onChange={(e) => setSelectedState(e.target.value)}
             className="w-full border rounded-md px-3 py-2"
           >
             <option value="">Choose a state…</option>
-            {Object.keys(stateConfig).map((st) => (
-              <option key={st} value={st}>{st}</option>
-            ))}
+            <option value={californiaConfig.state}>{californiaConfig.state}</option>
           </select>
           {config && (
             <div className="mt-4 p-4 bg-indigo-50 rounded-md space-y-1">
               <p className="font-semibold text-indigo-700">
-                Court Filing Fee: {config.fee === 0 ? "None" : `$${config.fee}`}
+                Court Filing Fee: ${config.filingFee}
               </p>
               <p className="text-sm text-gray-700">
                 Waiver Available: {config.waiverAvailable ? "Yes" : "No"}
@@ -179,23 +192,25 @@ export default function DynamicIntakeForm() {
 
         <div className="space-y-4 mb-10">
           <h2 className="text-xl font-bold text-gray-800">Personal Information</h2>
-          <input type="text" placeholder="Full Legal Name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full border rounded-md px-3 py-2" />
-          <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className="w-full border rounded-md px-3 py-2" />
-          <input type="email" placeholder="Email Address" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full border rounded-md px-3 py-2" />
+          <input type="text" placeholder="Full Legal Name" value={fullName} onChange={(e) => setFullName(e.target.value)} required className="w-full border rounded-md px-3 py-2" />
+          <input type="date" aria-label="Date of birth" value={dob} onChange={(e) => setDob(e.target.value)} max={new Date().toISOString().slice(0, 10)} required className="w-full border rounded-md px-3 py-2" />
+          {dob && !isAdultDateOfBirth(dob) && (
+            <p className="text-sm text-red-600">Applicants must be at least 18 years old.</p>
+          )}
+          <input type="email" placeholder="Email Address" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full border rounded-md px-3 py-2" />
           <input type="tel" placeholder="Phone Number" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full border rounded-md px-3 py-2" />
         </div>
         {config && (
           <div className="space-y-4 mb-10">
             <h2 className="text-xl font-bold text-gray-800">Record Details</h2>
-            {config.requiresCaseNumber && (
-              <input type="text" placeholder="Case Number" value={caseNumber} onChange={(e) => setCaseNumber(e.target.value)} className="w-full border rounded-md px-3 py-2" />
-            )}
-            {config.requiresCounty && (
-              <input type="text" placeholder="County of Conviction" value={county} onChange={(e) => setCounty(e.target.value)} className="w-full border rounded-md px-3 py-2" />
-            )}
-            <input type="number" placeholder="Year of Conviction" value={year} onChange={(e) => setYear(e.target.value)} className="w-full border rounded-md px-3 py-2" />
-            <input type="text" placeholder="Charge" value={charge} onChange={(e) => setCharge(e.target.value)} className="w-full border rounded-md px-3 py-2" />
-            <input type="text" placeholder="Disposition" value={disposition} onChange={(e) => setDisposition(e.target.value)} className="w-full border rounded-md px-3 py-2" />
+            <input type="text" placeholder="Case Number" value={caseNumber} onChange={(e) => setCaseNumber(e.target.value)} required className="w-full border rounded-md px-3 py-2" />
+            <select aria-label="County of conviction" value={county} onChange={(e) => setCounty(e.target.value)} required className="w-full border rounded-md px-3 py-2">
+              <option value="">Choose a California county…</option>
+              {californiaCounties.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+            <input type="number" placeholder="Year of Conviction" min="1900" max={new Date().getFullYear()} value={year} onChange={(e) => setYear(e.target.value)} required className="w-full border rounded-md px-3 py-2" />
+            <input type="text" placeholder="Charge" value={charge} onChange={(e) => setCharge(e.target.value)} required className="w-full border rounded-md px-3 py-2" />
+            <input type="text" placeholder="Disposition" value={disposition} onChange={(e) => setDisposition(e.target.value)} required className="w-full border rounded-md px-3 py-2" />
           </div>
         )}
         {config && (
@@ -232,7 +247,7 @@ export default function DynamicIntakeForm() {
         </label>
         <button
           onClick={handleSubmit}
-          disabled={!serviceType || !selectedState || !acknowledged}
+          disabled={!canContinue}
           className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg shadow disabled:opacity-50"
         >
           Continue to Checkout

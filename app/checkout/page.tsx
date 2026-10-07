@@ -20,6 +20,8 @@ type IntakePayload = {
   charge: string;
   disposition: string;
   flags: Record<string, boolean>;
+  acknowledged: boolean;
+  intakeToken: string;
 };
 
 function CheckoutPageInner() {
@@ -47,8 +49,11 @@ function CheckoutPageInner() {
       return;
     }
 
-    setData(JSON.parse(raw));
-    sessionStorage.removeItem("intake:" + token);
+    try {
+      setData(JSON.parse(raw));
+    } catch {
+      setNotFound(true);
+    }
   }, [searchParams]);
 
   const handleSubmit = async () => {
@@ -118,6 +123,11 @@ function CheckoutPageInner() {
   return (
     <main className="min-h-screen bg-gray-50 py-10 px-4">
       <div className="max-w-2xl mx-auto bg-white shadow-md rounded-lg p-8">
+        {searchParams.get("canceled") === "1" && (
+          <p role="status" className="mb-5 rounded-md bg-amber-50 p-3 text-sm text-amber-900">
+            Your payment was canceled. Your intake details are still available; review them and try again when ready.
+          </p>
+        )}
         <h1 className="text-3xl font-extrabold text-indigo-700 mb-2">
           Review &amp; Checkout
         </h1>

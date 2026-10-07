@@ -1,6 +1,14 @@
+"use client";
+
+import { useEffect } from "react";
 import LegalDisclosure from "../components/legal-disclosure";
 
 export default function ConfirmationPage() {
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("token");
+    if (token) sessionStorage.removeItem(`intake:${token}`);
+  }, []);
+
   return (
     <main className="min-h-screen bg-gray-50 py-10 px-4">
       <div className="max-w-xl mx-auto bg-white shadow-md rounded-lg p-8">
