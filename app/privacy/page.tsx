@@ -22,7 +22,8 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Payment information:</strong> processed by Stripe. We never see or store
-            your full card number; we receive a payment confirmation and a transaction ID.
+            your full card number. Stripe sends us a checkout completion event so we can
+            update your order status.
           </li>
           <li>
             <strong>Technical data:</strong> standard server logs (IP address, browser type,
@@ -33,17 +34,19 @@ export default function PrivacyPage() {
         <h2 className="text-xl font-bold mt-6">How we use it</h2>
         <ul>
           <li>To generate your document packet and filing instructions.</li>
-          <li>To process payment and send you transactional emails about your intake.</li>
-          <li>To maintain records of your order and respond to your requests.</li>
+          <li>To process payment and communicate with you about your intake when needed.</li>
+          <li>To maintain records of your order, document your required legal acknowledgement, and respond to your requests.</li>
           <li>To prevent fraud and keep the service secure.</li>
         </ul>
         <p>We do not sell your personal information and we do not use it for advertising.</p>
 
         <h2 className="text-xl font-bold mt-6">Who we share it with</h2>
         <p>
-          Service providers who help us operate: Stripe (payments), our hosting and database
-          providers, and our case-tracking system. Each processes data only on our instructions.
-          We may also disclose information when required by law.
+          Service providers who help us operate include Stripe (payments), Vercel (hosting),
+          Notion (intake records), and our case-tracking system. These providers process data
+          to operate the service. Hosting providers may also process technical connection and
+          request data for security and reliability. We may disclose information when required
+          by law.
         </p>
 
         <h2 className="text-xl font-bold mt-6">Sensitive information</h2>

@@ -13,7 +13,7 @@ export default function SiteFooter() {
           <a href="https://www.my-clean-slate.com/contact" className="hover:underline">Contact</a>
           <a href="https://www.my-clean-slate.com" className="hover:underline">my-clean-slate.com</a>
         </nav>
-        <p className="text-xs text-gray-400">© {year} My-Clean-Slate LLC. Serving all 58 California counties.</p>
+        <p className="text-xs text-gray-400">© {year} My-Clean-Slate LLC. California service; county availability is confirmed before payment.</p>
       </div>
     </footer>
   );

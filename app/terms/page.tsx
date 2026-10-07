@@ -55,8 +55,8 @@ export default function TermsPage() {
 
         <h2 className="text-xl font-bold mt-6">6. Your account and communications</h2>
         <p>
-          By providing an email address and phone number you consent to receive transactional
-          messages about your intake. Keep your contact information current.
+          We use the contact details you provide to identify your intake and communicate with
+          you about your order when needed. Keep your contact information current.
         </p>
 
         <h2 className="text-xl font-bold mt-6">7. Acceptable use</h2>

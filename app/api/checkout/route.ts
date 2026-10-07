@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Client } from "@notionhq/client";
 import Stripe from "stripe";
+import {
+  californiaConfig,
+  californiaCounties,
+  isAdultDateOfBirth,
+  serviceFees,
+  type ServiceType,
+} from "../../../lib/intake-config";
 
-const notion = new Client({ auth: process.env.NOTION_API_KEY });
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+export const runtime = "nodejs";
+export const maxDuration = 10;
 
 type IntakePayload = {
-  serviceType: string;
-  serviceFee: string;
+  serviceType: ServiceType;
   state: string;
-  fee: string;
-  waiver: string;
   fullName: string;
   dob: string;
   email: string;
@@ -21,31 +25,53 @@ type IntakePayload = {
   charge: string;
   disposition: string;
   flags: Record<string, boolean>;
+  acknowledged: boolean;
+  intakeToken: string;
 };
+
+const flagNames = [
+  "warrants",
+  "pending",
+  "priorExpungements",
+  "federal",
+  "sexOffense",
+  "violentOffense",
+];
 
 function isIntakePayload(value: unknown): value is IntakePayload {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
-  return (
-    typeof v.serviceType === "string" &&
-    typeof v.serviceFee === "string" &&
-    typeof v.state === "string" &&
-    typeof v.fee === "string" &&
-    typeof v.fullName === "string" &&
-    typeof v.email === "string" &&
-    typeof v.flags === "object" &&
-    v.flags !== null
-  );
+  if (
+    typeof v.serviceType !== "string" ||
+    !Object.prototype.hasOwnProperty.call(serviceFees, v.serviceType) ||
+    typeof v.state !== "string" ||
+    typeof v.fullName !== "string" ||
+    typeof v.dob !== "string" ||
+    typeof v.email !== "string" ||
+    typeof v.phone !== "string" ||
+    typeof v.caseNumber !== "string" ||
+    typeof v.county !== "string" ||
+    typeof v.year !== "string" ||
+    typeof v.charge !== "string" ||
+    typeof v.disposition !== "string" ||
+    v.acknowledged !== true ||
+    typeof v.intakeToken !== "string" ||
+    !/^[\w-]{8,80}$/.test(v.intakeToken) ||
+    !v.flags ||
+    typeof v.flags !== "object" ||
+    Array.isArray(v.flags)
+  ) {
+    return false;
+  }
+
+  const flags = v.flags as Record<string, unknown>;
+  return flagNames.every((name) => typeof flags[name] === "boolean");
 }
 
-/**
- * Best-effort fetch with a timeout. Never throws - callers decide what "best
- * effort" means for their step (log and continue).
- */
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
-  timeoutMs = 5000
+  timeoutMs = 2500
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -56,47 +82,23 @@ async function fetchWithTimeout(
   }
 }
 
-/**
- * Server-to-server sync into the filing engine backend (case-master-api on
- * Railway), authenticated via SERVICE_TOKEN per the platform's security
- * architecture (JWT for users, SERVICE_TOKEN for trusted backend callers).
- *
- * This is intentionally non-fatal to checkout: if CASE_MASTER_API_URL /
- * SERVICE_TOKEN aren't configured, or the backend call fails, the client's
- * payment flow still completes - the Notion record and Stripe session are
- * the source of truth for the transaction. Any sync failure here is logged
- * so it's visible in Vercel logs, never surfaced to the client.
- *
- * NOTE: filing creation will return 422 "county not configured" for any
- * county that hasn't had real court routing data entered via
- * POST /filing/counties on the backend yet. That's expected and logged,
- * not an error in this code - it starts succeeding automatically once each
- * county is configured with real data.
- */
 async function syncToFilingEngine(params: {
   recordId: string;
   payload: IntakePayload;
-  courtFeeAmount: number;
-}): Promise<void> {
+}): Promise<boolean> {
   const baseUrl = process.env.CASE_MASTER_API_URL;
   const serviceToken = process.env.SERVICE_TOKEN;
+  if (!baseUrl || !serviceToken) return false;
 
-  if (!baseUrl || !serviceToken) {
-    console.warn(
-      "[checkout] CASE_MASTER_API_URL / SERVICE_TOKEN not configured - skipping filing engine sync"
-    );
-    return;
-  }
-
-  const { recordId, payload, courtFeeAmount } = params;
+  const { recordId, payload } = params;
   const headers = {
     "Content-Type": "application/json",
     "X-Service-Token": serviceToken,
   };
 
-  let intakeId: number | null = null;
+  let intakeId: number;
   try {
-    const res = await fetchWithTimeout(`${baseUrl}/intake/`, {
+    const res = await fetchWithTimeout(`${baseUrl.replace(/\/+$/, "")}/intake/`, {
       method: "POST",
       headers,
       body: JSON.stringify({
@@ -113,50 +115,75 @@ async function syncToFilingEngine(params: {
           charge: payload.charge,
           disposition: payload.disposition,
           dob: payload.dob,
-          waiver: payload.waiver,
+          waiver: String(californiaConfig.waiverAvailable),
           flags: payload.flags,
         },
       }),
     });
 
     if (!res.ok) {
-      console.error(
-        `[checkout] Filing engine /intake/ sync failed (${res.status}):`,
-        await res.text().catch(() => "")
-      );
-      return;
+      console.error(`[checkout] Filing engine intake sync failed (${res.status})`);
+      return false;
     }
-
-    const intake = (await res.json()) as { id: number };
+    const intake = (await res.json()) as { id?: unknown };
+    if (typeof intake.id !== "number" || !Number.isFinite(intake.id)) {
+      console.error("[checkout] Filing engine returned an invalid intake ID");
+      return false;
+    }
     intakeId = intake.id;
   } catch (err) {
-    console.error("[checkout] Filing engine /intake/ sync error:", err);
-    return;
+    console.error("[checkout] Filing engine intake sync error:", err);
+    return false;
   }
 
   try {
-    const res = await fetchWithTimeout(`${baseUrl}/filing/`, {
+    const res = await fetchWithTimeout(`${baseUrl.replace(/\/+$/, "")}/filing/`, {
       method: "POST",
       headers,
       body: JSON.stringify({
         intake_id: intakeId,
         case_type: payload.serviceType,
         county: payload.county,
-        court_filing_fee: courtFeeAmount,
-        fee_waiver_requested: payload.waiver === "true",
+        court_filing_fee: californiaConfig.filingFee,
+        fee_waiver_requested: californiaConfig.waiverAvailable,
       }),
     });
-
     if (!res.ok) {
-      // Expected until each county is configured with real court data via
-      // POST /filing/counties - not an error worth alarming on.
-      console.warn(
-        `[checkout] Filing engine /filing/ creation not completed (${res.status}):`,
-        await res.text().catch(() => "")
-      );
+      console.error(`[checkout] Filing engine filing creation failed (${res.status})`);
+      return false;
     }
+    return true;
   } catch (err) {
-    console.error("[checkout] Filing engine /filing/ sync error:", err);
+    console.error("[checkout] Filing engine filing creation error:", err);
+    return false;
+  }
+}
+
+function getRequiredEnvironment() {
+  const notionApiKey = process.env.NOTION_API_KEY;
+  const notionDatabaseId = process.env.NOTION_DATABASE_ID;
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const appBaseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  const caseMasterApiUrl = process.env.CASE_MASTER_API_URL;
+  const serviceToken = process.env.SERVICE_TOKEN;
+
+  if (
+    !notionApiKey ||
+    !notionDatabaseId ||
+    !stripeSecretKey ||
+    !appBaseUrl ||
+    !caseMasterApiUrl ||
+    !serviceToken
+  ) {
+    return null;
+  }
+
+  try {
+    const url = new URL(appBaseUrl);
+    if (url.protocol !== "https:" && url.hostname !== "localhost") return null;
+    return { notionApiKey, notionDatabaseId, stripeSecretKey, appBaseUrl: url.origin };
+  } catch {
+    return null;
   }
 }
 
@@ -170,52 +197,75 @@ export async function POST(req: NextRequest) {
 
   if (!isIntakePayload(body)) {
     return NextResponse.json(
-      { error: "Missing or malformed intake fields" },
+      { error: "Missing or malformed intake fields or required acknowledgement" },
       { status: 422 }
     );
   }
 
   const payload = body;
-
-  if (!payload.fullName.trim() || !payload.email.trim() || !payload.state || !payload.serviceType) {
+  const county = californiaCounties.find(
+    (name) => name.toLowerCase() === payload.county.trim().toLowerCase()
+  );
+  const currentYear = new Date().getUTCFullYear();
+  if (
+    payload.state !== californiaConfig.state ||
+    !county ||
+    !payload.fullName.trim() ||
+    !isAdultDateOfBirth(payload.dob) ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email.trim()) ||
+    !payload.caseNumber.trim() ||
+    !/^(19\d{2}|20\d{2})$/.test(payload.year) ||
+    Number(payload.year) > currentYear ||
+    !payload.charge.trim() ||
+    !payload.disposition.trim()
+  ) {
     return NextResponse.json(
-      { error: "Service type, full name, email, and state are required" },
+      { error: "Check your California intake details, including required fields and age eligibility." },
       { status: 422 }
     );
   }
 
-  const courtFeeAmount = Number(payload.fee) || 0;
-  const serviceFeeAmount = Number(payload.serviceFee) || 0;
-  const totalAmount = courtFeeAmount + serviceFeeAmount;
+  const env = getRequiredEnvironment();
+  if (!env) {
+    return NextResponse.json(
+      { error: "Checkout is temporarily unavailable. Please contact support." },
+      { status: 503 }
+    );
+  }
 
+  const notion = new Client({ auth: env.notionApiKey });
+  const stripe = new Stripe(env.stripeSecretKey);
+  const serviceFeeAmount = serviceFees[payload.serviceType];
+  const courtFeeAmount = californiaConfig.filingFee;
+  const totalAmount = courtFeeAmount + serviceFeeAmount;
   const activeFlags = Object.entries(payload.flags)
-    .filter(([, v]) => v)
-    .map(([k]) => k)
+    .filter(([, value]) => value)
+    .map(([name]) => name)
     .join(", ");
 
   let recordId: string;
   try {
     const page = await notion.pages.create({
-      parent: { database_id: process.env.NOTION_DATABASE_ID! },
+      parent: { database_id: env.notionDatabaseId },
       properties: {
-        "Name": { title: [{ text: { content: payload.fullName } }] },
-        Email: { email: payload.email || null },
-        Phone: { phone_number: payload.phone || null },
-        State: { select: { name: payload.state } },
-        DOB: payload.dob ? { date: { start: payload.dob } } : { date: null },
-        "Case Number": { rich_text: [{ text: { content: payload.caseNumber } }] },
-        County: { rich_text: [{ text: { content: payload.county } }] },
+        Name: { title: [{ text: { content: payload.fullName.trim() } }] },
+        Email: { email: payload.email.trim() },
+        Phone: { phone_number: payload.phone.trim() || null },
+        State: { select: { name: californiaConfig.state } },
+        DOB: { date: { start: payload.dob } },
+        "Case Number": { rich_text: [{ text: { content: payload.caseNumber.trim() } }] },
+        County: { rich_text: [{ text: { content: county } }] },
         Year: { rich_text: [{ text: { content: payload.year } }] },
-        Charge: { rich_text: [{ text: { content: payload.charge } }] },
-        Disposition: { rich_text: [{ text: { content: payload.disposition } }] },
+        Charge: { rich_text: [{ text: { content: payload.charge.trim() } }] },
+        Disposition: { rich_text: [{ text: { content: payload.disposition.trim() } }] },
         "Service Type": { select: { name: payload.serviceType } },
         "Service Fee": { number: serviceFeeAmount },
         "Filing Fee": { number: courtFeeAmount },
-        "Waiver Available": { checkbox: payload.waiver === "true" },
+        "Waiver Available": { checkbox: californiaConfig.waiverAvailable },
         Flags: { rich_text: [{ text: { content: activeFlags || "None" } }] },
-        "Payment Status": {
-          select: { name: "Pending" },
-        },
+        "Legal Acknowledged": { checkbox: true },
+        "Legal Acknowledged At": { date: { start: new Date().toISOString() } },
+        "Payment Status": { select: { name: "Pending" } },
       },
     });
     recordId = page.id;
@@ -227,47 +277,55 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Best-effort sync into the secured filing engine backend. Never blocks or
-  // fails checkout - see syncToFilingEngine's doc comment.
-  await syncToFilingEngine({ recordId, payload, courtFeeAmount });
+  const filingReady = await syncToFilingEngine({ recordId, payload: { ...payload, county } });
+  if (!filingReady) {
+    return NextResponse.json(
+      { error: "We cannot accept payment for this county right now. Please contact support." },
+      { status: 503 }
+    );
+  }
 
-  let checkoutUrl: string | null = null;
   try {
-    if (totalAmount > 0) {
-      const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      {
+        price_data: {
+          currency: "usd",
+          product_data: { name: `${californiaConfig.state} Court Filing Fee` },
+          unit_amount: courtFeeAmount * 100,
+        },
+        quantity: 1,
+      },
+      {
+        price_data: {
+          currency: "usd",
+          product_data: { name: `${payload.serviceType} Service Fee` },
+          unit_amount: serviceFeeAmount * 100,
+        },
+        quantity: 1,
+      },
+    ];
+    const successUrl = new URL("/confirmation", env.appBaseUrl);
+    successUrl.searchParams.set("id", recordId);
+    successUrl.searchParams.set("token", payload.intakeToken);
+    const cancelUrl = new URL("/checkout", env.appBaseUrl);
+    cancelUrl.searchParams.set("token", payload.intakeToken);
+    cancelUrl.searchParams.set("canceled", "1");
 
-      if (courtFeeAmount > 0) {
-        lineItems.push({
-          price_data: {
-            currency: "usd",
-            product_data: { name: `${payload.state} Court Filing Fee` },
-            unit_amount: Math.round(courtFeeAmount * 100),
-          },
-          quantity: 1,
-        });
-      }
-
-      if (serviceFeeAmount > 0) {
-        lineItems.push({
-          price_data: {
-            currency: "usd",
-            product_data: { name: `${payload.serviceType} Service Fee` },
-            unit_amount: Math.round(serviceFeeAmount * 100),
-          },
-          quantity: 1,
-        });
-      }
-
-      const session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        payment_method_types: ["card"],
-        line_items: lineItems,
-        metadata: { notionRecordId: recordId },
-        success_url: process.env.NEXT_PUBLIC_BASE_URL + "/confirmation?id=" + recordId,
-        cancel_url: process.env.NEXT_PUBLIC_BASE_URL + "/checkout",
-      });
-      checkoutUrl = session.url;
-    }
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: lineItems,
+      metadata: { notionRecordId: recordId },
+      success_url: successUrl.toString(),
+      cancel_url: cancelUrl.toString(),
+    });
+    if (!session.url) throw new Error("Stripe returned no checkout URL");
+    return NextResponse.json({
+      ok: true,
+      recordId,
+      checkoutUrl: session.url,
+      totalAmount,
+    });
   } catch (err) {
     console.error("Stripe checkout session creation failed", err);
     return NextResponse.json(
@@ -275,6 +333,4 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
-
-  return NextResponse.json({ ok: true, recordId, checkoutUrl });
 }

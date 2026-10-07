@@ -47,9 +47,10 @@ export default function DisclaimerPage() {
 
         <h2 className="text-xl font-bold mt-6">California only</h2>
         <p>
-          Our document packets are prepared for California superior courts. Laws differ by
-          state and change over time; nothing on this site should be relied on for matters
-          outside California.
+          Our document packets are prepared for California superior courts. We accept payment
+          only when the selected county has an active filing workflow. Laws differ by state
+          and change over time; nothing on this site should be relied on for matters outside
+          California.
         </p>
 
         <h2 className="text-xl font-bold mt-6">Need legal advice?</h2>
