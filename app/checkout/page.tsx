@@ -141,7 +141,7 @@ function CheckoutPageInner() {
             <dt className="text-gray-700 font-semibold border-t pt-2 mt-1">Service Fee Due Now</dt>
             <dd className="font-semibold border-t pt-2 mt-1">${totalDue.toFixed(2)}</dd>
           </dl>
-        </section
+        </section>
 
         <section className="mb-8">
           <h2 className="text-lg font-bold text-gray-800 mb-3">Personal Information</h2>
