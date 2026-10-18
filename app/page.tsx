@@ -74,8 +74,7 @@ export default function DynamicIntakeForm() {
 
   const selectedService = serviceTypeOptions.find((s) => s.value === serviceType) || null;
   const serviceFee = selectedService ? selectedService.fee : 0;
-  const totalDue = (config?.fee ?? 0) + serviceFee;
-
+  const totalDue = Service Fee;
   const handleSubmit = () => {
     if (!serviceType || !selectedState || !config || !acknowledged) return;
     const payload = {
@@ -158,7 +157,7 @@ export default function DynamicIntakeForm() {
           {config && (
             <div className="mt-4 p-4 bg-indigo-50 rounded-md space-y-1">
               <p className="font-semibold text-indigo-700">
-                Court Filing Fee: {config.fee === 0 ? "None" : `$${config.fee}`}
+                Estimated Court Filing Fee: {config.fee === 0 ? "None" : `$${config.fee}`}
               </p>
               <p className="text-sm text-gray-700">
                 Waiver Available: {config.waiverAvailable ? "Yes" : "No"}
@@ -169,7 +168,7 @@ export default function DynamicIntakeForm() {
                     Service Fee ({selectedService.label}): ${serviceFee}
                   </p>
                   <p className="font-semibold text-indigo-700 border-t border-indigo-200 pt-1 mt-1">
-                    Total Due: ${totalDue}
+                    Service Fee Due Now: ${totalDue}
                   </p>
                 </>
               )}
