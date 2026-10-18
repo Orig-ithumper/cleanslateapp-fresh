@@ -132,16 +132,16 @@ function CheckoutPageInner() {
             <dd>{data.serviceType || "—"}</dd>
             <dt className="text-gray-500">State</dt>
             <dd>{data.state}</dd>
-            <dt className="text-gray-500">Court Filing Fee</dt>
+            <dt className="text-gray-500">Estimated Court Filing Fee</dt>
             <dd>{courtFee === 0 ? "None" : "$" + courtFee.toFixed(2)}</dd>
             <dt className="text-gray-500">Waiver Available</dt>
             <dd>{data.waiver === "true" ? "Yes" : "No"}</dd>
             <dt className="text-gray-500">Service Fee</dt>
             <dd>${serviceFee.toFixed(2)}</dd>
-            <dt className="text-gray-700 font-semibold border-t pt-2 mt-1">Total Due</dt>
+            <dt className="text-gray-700 font-semibold border-t pt-2 mt-1">Service Fee Due Now</dt>
             <dd className="font-semibold border-t pt-2 mt-1">${totalDue.toFixed(2)}</dd>
           </dl>
-        </section>
+        </section
 
         <section className="mb-8">
           <h2 className="text-lg font-bold text-gray-800 mb-3">Personal Information</h2>
