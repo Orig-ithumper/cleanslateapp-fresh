@@ -113,7 +113,7 @@ function CheckoutPageInner() {
 
   const courtFee = Number(data.fee) || 0;
   const serviceFee = Number(data.serviceFee) || 0;
-  const totalDue = courtFee + serviceFee;
+  const totalDue = serviceFee;
 
   return (
     <main className="min-h-screen bg-gray-50 py-10 px-4">
