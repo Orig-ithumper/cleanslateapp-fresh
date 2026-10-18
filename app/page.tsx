@@ -74,7 +74,7 @@ export default function DynamicIntakeForm() {
 
   const selectedService = serviceTypeOptions.find((s) => s.value === serviceType) || null;
   const serviceFee = selectedService ? selectedService.fee : 0;
-  const totalDue = Service Fee;
+  const totalDue = serviceFee;
   const handleSubmit = () => {
     if (!serviceType || !selectedState || !config || !acknowledged) return;
     const payload = {
