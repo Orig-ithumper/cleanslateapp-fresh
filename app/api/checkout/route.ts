@@ -184,10 +184,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const courtFeeAmount = Number(payload.fee) || 0;
-  const serviceFeeAmount = Number(payload.serviceFee) || 0;
-  const totalAmount = courtFeeAmount + serviceFeeAmount;
+const listedCourtFeeAmount = Number(payload.fee) || 0;
+const serviceFeeAmount = Number(payload.serviceFee) || 0;
 
+// A court filing fee is not collected while a fee-waiver request is pending.
+// Keep the listed court fee for the case record, but exclude it from checkout.
+const feeWaiverRequested = payload.waiver === "true";
+const courtFeeDueNow = feeWaiverRequested ? 0 : listedCourtFeeAmount;
+
+const totalAmount = courtFeeDueNow + serviceFeeAmount;
   const activeFlags = Object.entries(payload.flags)
     .filter(([, v]) => v)
     .map(([k]) => k)
@@ -210,7 +215,7 @@ export async function POST(req: NextRequest) {
         Disposition: { rich_text: [{ text: { content: payload.disposition } }] },
         "Service Type": { select: { name: payload.serviceType } },
         "Service Fee": { number: serviceFeeAmount },
-        "Filing Fee": { number: courtFeeAmount },
+        "Filing Fee": { number: listedCourtFeeAmount },
         "Waiver Available": { checkbox: payload.waiver === "true" },
         Flags: { rich_text: [{ text: { content: activeFlags || "None" } }] },
         "Payment Status": {
@@ -229,23 +234,26 @@ export async function POST(req: NextRequest) {
 
   // Best-effort sync into the secured filing engine backend. Never blocks or
   // fails checkout - see syncToFilingEngine's doc comment.
-  await syncToFilingEngine({ recordId, payload, courtFeeAmount });
-
+await syncToFilingEngine({
+  recordId,
+  payload,
+  courtFeeAmount: listedCourtFeeAmount,
+});
   let checkoutUrl: string | null = null;
   try {
     if (totalAmount > 0) {
       const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
 
-      if (courtFeeAmount > 0) {
-        lineItems.push({
-          price_data: {
-            currency: "usd",
-            product_data: { name: `${payload.state} Court Filing Fee` },
-            unit_amount: Math.round(courtFeeAmount * 100),
-          },
-          quantity: 1,
-        });
-      }
+      if (courtFeeDueNow > 0) {
+  lineItems.push({
+    price_data: {
+      currency: "usd",
+      product_data: { name: `${payload.state} Court Filing Fee` },
+      unit_amount: Math.round(courtFeeDueNow * 100),
+    },
+    quantity: 1,
+  });
+}
 
       if (serviceFeeAmount > 0) {
         lineItems.push({
