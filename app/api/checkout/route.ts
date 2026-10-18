@@ -79,8 +79,7 @@ async function syncToFilingEngine(params: {
   courtFeeAmount: number;
 }): Promise<void> {
   const baseUrl = process.env.CASE_MASTER_API_URL;
-  const serviceToken = process.env.SERVICE_TOKEN;
-
+  const serviceToken = process.env.INTAKE_SERVICE_TOKEN;
   if (!baseUrl || !serviceToken) {
     console.warn(
       "[checkout] CASE_MASTER_API_URL / SERVICE_TOKEN not configured - skipping filing engine sync"
