@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import LegalDisclosure from "./components/legal-disclosure";
+import SignaturePad from "./components/SignaturePad";
 
 const stateConfig = {
   // My-Clean-Slate prepares documents for California superior courts only.
   California: { fee: 120, requiresCaseNumber: true, requiresCounty: true, waiverAvailable: true },
 };
+
 
 const serviceTypeOptions = [
   {
