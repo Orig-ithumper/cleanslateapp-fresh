@@ -61,6 +61,7 @@ export default function DynamicIntakeForm() {
   const [year, setYear] = useState("");
   const [charge, setCharge] = useState("");
   const [disposition, setDisposition] = useState("");
+  const [signature, setSignature] = useState<string | null>(null);
   const [flags, setFlags] = useState<Flags>({
     warrants: false,
     pending: false,
@@ -78,7 +79,7 @@ export default function DynamicIntakeForm() {
   const serviceFee = selectedService ? selectedService.fee : 0;
   const totalDue = serviceFee;
   const handleSubmit = () => {
-    if (!serviceType || !selectedState || !config || !acknowledged) return;
+    if (!serviceType || !selectedState || !config || !signature || !acknowledged) return;
     const payload = {
       serviceType,
       serviceFee: String(serviceFee),
@@ -94,6 +95,7 @@ export default function DynamicIntakeForm() {
       year,
       charge,
       disposition,
+      signature,
       flags,
     };
     const token =
@@ -214,6 +216,16 @@ export default function DynamicIntakeForm() {
             ))}
           </div>
         )}
+       
+  <div className="mb-10">
+  <h2 className="text-xl font-bold text-gray-800 mb-4">
+    Electronic Signature
+  </h2>
+ <p className="text-sm text-gray-600 mb-3">
+    Sign below using your mouse or finger.
+  </p>
+  <SignaturePad onChange={setSignature} />
+  </div>
         <label className="flex items-start gap-3 mb-6 text-sm text-gray-700">
           <input
             type="checkbox"
@@ -233,7 +245,7 @@ export default function DynamicIntakeForm() {
         </label>
         <button
           onClick={handleSubmit}
-          disabled={!serviceType || !selectedState || !acknowledged}
+         disabled={!serviceType || !selectedState || !signature || !acknowledged}
           className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg shadow disabled:opacity-50"
         >
           Continue to Checkout
