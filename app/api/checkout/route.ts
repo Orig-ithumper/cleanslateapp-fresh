@@ -20,6 +20,7 @@ type IntakePayload = {
   year: string;
   charge: string;
   disposition: string;
+  signature: string | null;
   flags: Record<string, boolean>;
 };
 
