@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Client } from "@notionhq/client";
 import Stripe from "stripe";
+import { put } from "@vercel/blob";
 
 const notion = new Client({ auth: process.env.NOTION_API_KEY });
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -20,7 +21,7 @@ type IntakePayload = {
   year: string;
   charge: string;
   disposition: string;
-  signature: string | null;
+  signature: string;
   flags: Record<string, boolean>;
 };
 
@@ -34,6 +35,7 @@ function isIntakePayload(value: unknown): value is IntakePayload {
     typeof v.fee === "string" &&
     typeof v.fullName === "string" &&
     typeof v.email === "string" &&
+    typeof v.signature === "string" &&
     typeof v.flags === "object" &&
     v.flags !== null
   );
@@ -57,13 +59,44 @@ async function fetchWithTimeout(
   }
 }
 
+async function storeSignature(
+  signature: string,
+  recordId: string
+): Promise<string> {
+  const prefix = "data:image/png;base64,";
+
+  if (!signature.startsWith(prefix)) {
+    throw new Error("Invalid signature image format");
+  }
+
+  const imageBuffer = Buffer.from(
+    signature.slice(prefix.length),
+    "base64"
+  );
+
+  if (imageBuffer.length === 0 || imageBuffer.length > 1_000_000) {
+    throw new Error("Invalid signature image size");
+  }
+
+  const blob = await put(
+    `signatures/${recordId}.png`,
+    imageBuffer,
+    {
+      access: "private",
+      contentType: "image/png",
+      addRandomSuffix: true,
+    }
+  );
+
+  return blob.pathname;
+}
 /**
  * Server-to-server sync into the filing engine backend (case-master-api on
- * Railway), authenticated via SERVICE_TOKEN per the platform's security
- * architecture (JWT for users, SERVICE_TOKEN for trusted backend callers).
+ * Railway), authenticated via INTAKE_SERVICE_TOKEN per the platform's security
+ * architecture (JWT for users, INTAKE_SERVICE_TOKEN for trusted backend callers).
  *
  * This is intentionally non-fatal to checkout: if CASE_MASTER_API_URL /
- * SERVICE_TOKEN aren't configured, or the backend call fails, the client's
+ * INTAKE_SERVICE_TOKEN aren't configured, or the backend call fails, the client's
  * payment flow still completes - the Notion record and Stripe session are
  * the source of truth for the transaction. Any sync failure here is logged
  * so it's visible in Vercel logs, never surfaced to the client.
@@ -78,6 +111,7 @@ async function syncToFilingEngine(params: {
   recordId: string;
   payload: IntakePayload;
   courtFeeAmount: number;
+  signaturePath: string;
 }): Promise<void> {
   const baseUrl = process.env.CASE_MASTER_API_URL;
   const serviceToken = process.env.INTAKE_SERVICE_TOKEN;
@@ -88,7 +122,7 @@ async function syncToFilingEngine(params: {
     return;
   }
 
-  const { recordId, payload, courtFeeAmount } = params;
+  const { recordId, payload, courtFeeAmount, signaturePath } = params;
   const headers = {
     "Content-Type": "application/json",
     "X-Service-Token": serviceToken,
@@ -115,6 +149,7 @@ async function syncToFilingEngine(params: {
           dob: payload.dob,
           waiver: payload.waiver,
           flags: payload.flags,
+          signaturePath,
         },
       }),
     });
@@ -187,12 +222,9 @@ export async function POST(req: NextRequest) {
 const listedCourtFeeAmount = Number(payload.fee) || 0;
 const serviceFeeAmount = Number(payload.serviceFee) || 0;
 
-// A court filing fee is not collected while a fee-waiver request is pending.
-// Keep the listed court fee for the case record, but exclude it from checkout.
-const feeWaiverRequested = payload.waiver === "true";
-const courtFeeDueNow = feeWaiverRequested ? 0 : listedCourtFeeAmount;
-
-const totalAmount = courtFeeDueNow + serviceFeeAmount;
+// Court filing fees are recorded separately and are not collected at checkout.
+// Checkout collects only the My-Clean-Slate service fee.
+const totalAmount = serviceFeeAmount;
   const activeFlags = Object.entries(payload.flags)
     .filter(([, v]) => v)
     .map(([k]) => k)
@@ -232,28 +264,30 @@ const totalAmount = courtFeeDueNow + serviceFeeAmount;
     );
   }
 
+let signaturePath: string;
+  try {
+    signaturePath = await storeSignature(payload.signature, recordId);
+  } catch (err) {
+    console.error("Private signature upload failed", err);
+    return NextResponse.json(
+      { error: "We couldn't securely save your signature. Please try again." },
+      { status: 502 }
+    );
+  }
+  
+  
   // Best-effort sync into the secured filing engine backend. Never blocks or
   // fails checkout - see syncToFilingEngine's doc comment.
 await syncToFilingEngine({
   recordId,
   payload,
+  signaturePath,
   courtFeeAmount: listedCourtFeeAmount,
 });
   let checkoutUrl: string | null = null;
   try {
     if (totalAmount > 0) {
       const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
-
-      if (courtFeeDueNow > 0) {
-  lineItems.push({
-    price_data: {
-      currency: "usd",
-      product_data: { name: `${payload.state} Court Filing Fee` },
-      unit_amount: Math.round(courtFeeDueNow * 100),
-    },
-    quantity: 1,
-  });
-}
 
       if (serviceFeeAmount > 0) {
         lineItems.push({
