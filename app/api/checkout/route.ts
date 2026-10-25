@@ -233,9 +233,9 @@ const totalAmount = serviceFeeAmount;
   let recordId: string;
   try {
     const page = await notion.pages.create({
-      parent: { database_id: process.env.NOTION_DATABASE_ID! },
-      properties: {
-        "Name": { title: [{ text: { content: payload.fullName } }] },
+  parent: {data_source_id: process.env.NOTION_DATA_SOURCE_ID!,},
+  properties: {
+  Name: {title: [{ text: { content: payload.fullName } }] },
         Email: { email: payload.email || null },
         Phone: { phone_number: payload.phone || null },
         State: { select: { name: payload.state } },
