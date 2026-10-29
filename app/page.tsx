@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import LegalDisclosure from "./components/legal-disclosure";
-import SignaturePad from "./components/SignaturePad";
+import SignaturePad from "./SignaturePad";
 
 const stateConfig = {
   // My-Clean-Slate prepares documents for California superior courts only.
