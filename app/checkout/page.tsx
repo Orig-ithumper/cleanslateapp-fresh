@@ -1,228 +1,63 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import LegalDisclosure from "../components/legal-disclosure";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import LegalDisclosure from "./components/legal-disclosure";
+import SignaturePad from "./components/SignaturePad";
 
-type IntakePayload = {
-  serviceType: string;
-  serviceFee: string;
-  state: string;
-  fee: string;
-  waiver: string;
-  fullName: string;
-  dob: string;
-  email: string;
-  phone: string;
-  caseNumber: string;
-  county: string;
-  year: string;
-  charge: string;
-  disposition: string;
-  signature: string | null;
-  flags: Record<string, boolean>;
+const stateConfig = {
+  California: { fee: 120, requiresCaseNumber: true, requiresCounty: true, waiverAvailable: true },
 };
 
-function CheckoutPageInner() {
-  const searchParams = useSearchParams();
+const serviceTypeOptions = [
+  { value: "Expungement", label: "Expungement", fee: 249, description: "Complete packet + county-specific forms + filing instructions." },
+  { value: "Record Sealing", label: "Record Sealing", fee: 249, description: "For eligible arrests or cases that didn't result in conviction." },
+  { value: "Felony Reduction (17(b))", label: "Felony Reduction (17(b))", fee: 149, description: "Reduce eligible felonies to misdemeanors." },
+  { value: "Early Termination of Probation", label: "Early Termination of Probation", fee: 149, description: "Shorten probation and unlock opportunities sooner." },
+];
+
+type Flags = { warrants:boolean; pending:boolean; priorExpungements:boolean; federal:boolean; sexOffense:boolean; violentOffense:boolean };
+
+export default function DynamicIntakeForm() {
   const router = useRouter();
-  const [data, setData] = useState<IntakePayload | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const hasLoaded = useRef(false);
+  const [serviceType,setServiceType]=useState("");
+  const [acknowledged,setAcknowledged]=useState(false);
+  const [selectedState,setSelectedState]=useState("");
+  const [fullName,setFullName]=useState("");
+  const [dob,setDob]=useState("");
+  const [email,setEmail]=useState("");
+  const [phone,setPhone]=useState("");
+  const [contactMethod,setContactMethod]=useState("");
+  const [caseNumber,setCaseNumber]=useState("");
+  const [county,setCounty]=useState("");
+  const [year,setYear]=useState("");
+  const [charge,setCharge]=useState("");
+  const [disposition,setDisposition]=useState("");
+  const [signature,setSignature]=useState<string|null>(null);
+  const [flags,setFlags]=useState<Flags>({warrants:false,pending:false,priorExpungements:false,federal:false,sexOffense:false,violentOffense:false});
+  const config=selectedState?stateConfig[selectedState as keyof typeof stateConfig]:null;
+  const selectedService=serviceTypeOptions.find(s=>s.value===serviceType)||null;
+  const serviceFee=selectedService?selectedService.fee:0;
+  const totalDue=serviceFee;
 
-  useEffect(() => {
-    if (hasLoaded.current) return;
-    hasLoaded.current = true;
-
-    const token = searchParams.get("token");
-    if (!token) {
-      setNotFound(true);
-      return;
-    }
-
-    const raw = sessionStorage.getItem("intake:" + token);
-    if (!raw) {
-      setNotFound(true);
-      return;
-    }
-
-    setData(JSON.parse(raw));
-    sessionStorage.removeItem("intake:" + token);
-  }, [searchParams]);
-
-  const handleSubmit = async () => {
-    if (!data) return;
-    setSubmitting(true);
-    setSubmitError(null);
-
-    try {
-      const res = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-
-      const result = await res.json();
-
-      if (!res.ok) {
-        setSubmitError(result.error ?? "Submission failed. Please try again.");
-        return;
-      }
-
-      if (result.checkoutUrl) {
-        window.location.href = result.checkoutUrl;
-      } else {
-        router.push("/confirmation?id=" + result.recordId);
-      }
-    } catch {
-      setSubmitError("Network error — please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+  const handleSubmit=()=>{
+    if(!serviceType||!selectedState||!config||!signature||!acknowledged)return;
+    const payload={serviceType,serviceFee:String(serviceFee),state:selectedState,fee:String(config.fee),waiver:String(config.waiverAvailable),fullName,dob,email,phone,contactMethod,caseNumber,county,year,charge,disposition,signature,flags};
+    const token=typeof crypto!=="undefined"&&"randomUUID" in crypto?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36);
+    sessionStorage.setItem(`intake:${token}`,JSON.stringify(payload));router.push(`/checkout?token=${token}`);
   };
 
-  if (notFound) {
-    return (
-      <main className="min-h-screen bg-gray-50 py-10 px-4">
-        <div className="max-w-xl mx-auto bg-white shadow-md rounded-lg p-8 text-center">
-          <h1 className="text-xl font-bold text-gray-800 mb-3">
-            We couldn&apos;t find your intake details
-          </h1>
-          <p className="text-gray-600 mb-6">
-            Your session may have expired, or this link was opened in a new
-            tab. Please start over from the intake form.
-          </p>
-          <button
-            onClick={() => router.push("/")}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-3 rounded-lg shadow"
-          >
-            Back to Intake Form
-          </button>
-        </div>
-      </main>
-    );
-  }
-
-  if (!data) {
-    return <main className="min-h-screen bg-gray-50 py-10 px-4">Loading…</main>;
-  }
-
-  const activeFlags = Object.entries(data.flags)
-    .filter(([, value]) => value)
-    .map(([key]) => key.replace(/([A-Z])/g, " $1").trim());
-
-  const courtFee = Number(data.fee) || 0;
-  const serviceFee = Number(data.serviceFee) || 0;
-  const totalDue = serviceFee;
-
-  const rowClass = "grid grid-cols-[220px_1fr] gap-x-6 gap-y-2 text-sm items-baseline";
-  const labelClass = "text-gray-500";
-  const valueClass = "text-gray-900 min-w-0 break-words";
-
-  return (
-    <main className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-2xl mx-auto bg-white shadow-md rounded-lg p-8">
-        <h1 className="text-3xl font-extrabold text-indigo-700 mb-2">
-          Review & Checkout
-        </h1>
-        <p className="text-gray-600 mb-8">
-          Please confirm your details before proceeding to payment.
-        </p>
-
-        <section className="mb-8">
-          <h2 className="text-lg font-bold text-gray-800 mb-3">State & Filing</h2>
-          <dl className={rowClass}>
-            <dt className={labelClass}>Service</dt>
-            <dd className={valueClass}>{data.serviceType || "—"}</dd>
-            <dt className={labelClass}>State</dt>
-            <dd className={valueClass}>{data.state || "—"}</dd>
-            <dt className={labelClass}>Estimated Court Filing Fee</dt>
-            <dd className={valueClass}>{courtFee === 0 ? "None" : "$" + courtFee.toFixed(2)}</dd>
-            <dt className={labelClass}>Waiver Available</dt>
-            <dd className={valueClass}>{data.waiver === "true" ? "Yes" : "No"}</dd>
-            <dt className={labelClass}>Service Fee</dt>
-            <dd className={valueClass}>${serviceFee.toFixed(2)}</dd>
-            <dt className="text-gray-700 font-semibold border-t pt-2 mt-1">Service Fee Due Now</dt>
-            <dd className="font-semibold text-gray-900 border-t pt-2 mt-1">${totalDue.toFixed(2)}</dd>
-          </dl>
-        </section>
-
-        <section className="mb-8">
-          <h2 className="text-lg font-bold text-gray-800 mb-3">Personal Information</h2>
-          <dl className={rowClass}>
-            <dt className={labelClass}>Full Name</dt>
-            <dd className={valueClass}>{data.fullName || "—"}</dd>
-            <dt className={labelClass}>Date of Birth</dt>
-            <dd className={valueClass}>{data.dob || "—"}</dd>
-            <dt className={labelClass}>Email</dt>
-            <dd className={valueClass}>{data.email || "—"}</dd>
-            <dt className={labelClass}>Phone</dt>
-            <dd className={valueClass}>{data.phone || "—"}</dd>
-          </dl>
-        </section>
-
-        <section className="mb-8">
-          <h2 className="text-lg font-bold text-gray-800 mb-3">Record Details</h2>
-          <dl className={rowClass}>
-            <dt className={labelClass}>Case Number</dt>
-            <dd className={valueClass}>{data.caseNumber || "—"}</dd>
-            <dt className={labelClass}>County</dt>
-            <dd className={valueClass}>{data.county || "—"}</dd>
-            <dt className={labelClass}>Year</dt>
-            <dd className={valueClass}>{data.year || "—"}</dd>
-            <dt className={labelClass}>Charge</dt>
-            <dd className={valueClass}>{data.charge || "—"}</dd>
-            <dt className={labelClass}>Disposition</dt>
-            <dd className={valueClass}>{data.disposition || "—"}</dd>
-          </dl>
-        </section>
-
-        {activeFlags.length > 0 && (
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-gray-800 mb-3">Flagged Items</h2>
-            <ul className="list-disc list-inside text-sm text-gray-700">
-              {activeFlags.map((f) => (
-                <li key={f} className="capitalize">{f}</li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <LegalDisclosure className="mb-4" />
-
-        {submitError && (
-          <p className="text-red-600 text-sm mb-3">{submitError}</p>
-        )}
-
-        <button
-          className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg shadow disabled:opacity-50"
-          disabled={submitting}
-          onClick={handleSubmit}
-        >
-          {submitting ? "Processing…" : "Pay $" + totalDue.toFixed(2) + " & Submit"}
-        </button>
-
-        <p className="mt-3 text-xs text-gray-500 text-center">
-          By clicking Pay & Submit you agree to our{" "}
-          <a href="/terms" className="underline">Terms of Service</a> and{" "}
-          <a href="/privacy" className="underline">Privacy Policy</a>, and acknowledge that
-          My-Clean-Slate is not a law firm and does not provide legal advice.
-        </p>
-      </div>
-    </main>
-  );
-}
-
-export default function CheckoutPage() {
-  return (
-    <Suspense
-      fallback={
-        <main className="min-h-screen bg-gray-50 py-10 px-4">Loading…</main>
-      }
-    >
-      <CheckoutPageInner />
-    </Suspense>
-  );
+  return <main className="min-h-screen bg-gray-50 py-10 px-4"><div className="max-w-3xl mx-auto bg-white shadow-md rounded-lg p-8">
+    <h1 className="text-4xl font-extrabold text-center text-indigo-700 mb-6">Expungement Intake Form</h1>
+    <p className="text-center text-gray-600 mb-8">Your answers allow us to generate county-specific California record-relief paperwork.</p>
+    <LegalDisclosure variant="banner" className="mb-8" />
+    <div className="mb-8"><label className="block text-sm font-medium mb-2">Select Your Service</label><div className="space-y-2">{serviceTypeOptions.map(opt=><label key={opt.value} className="flex items-start justify-between gap-3 border rounded-md px-3 py-3 cursor-pointer"><span className="flex items-start gap-3"><input type="radio" name="serviceType" value={opt.value} checked={serviceType===opt.value} onChange={e=>setServiceType(e.target.value)} className="mt-1"/><span><span className="block font-medium">{opt.label}</span><span className="block text-sm text-gray-500">{opt.description}</span></span></span><span className="text-sm font-semibold text-gray-700 whitespace-nowrap">${opt.fee}</span></label>)}</div></div>
+    <div className="mb-8"><label className="block text-sm font-medium mb-2">Select Your State</label><p className="text-xs text-gray-500 mb-2">We currently serve California only (all 58 counties).</p><select value={selectedState} onChange={e=>setSelectedState(e.target.value)} className="w-full border rounded-md px-3 py-2"><option value="">Choose a state...</option>{Object.keys(stateConfig).map(st=><option key={st} value={st}>{st}</option>)}</select>{config&&<div className="mt-4 p-4 bg-indigo-50 rounded-md space-y-1"><p className="font-semibold text-indigo-700">Estimated Court Filing Fee: ${config.fee}</p><p className="text-sm text-gray-700">Waiver Available: {config.waiverAvailable?"Yes":"No"}</p>{selectedService&&<><p className="text-sm text-gray-700">Service Fee ({selectedService.label}): ${serviceFee}</p><p className="font-semibold text-indigo-700 border-t border-indigo-200 pt-1 mt-1">Service Fee Due Now: ${totalDue}</p></>}</div>}</div>
+    <div className="space-y-4 mb-10"><h2 className="text-xl font-bold text-gray-800">Personal Information</h2><input type="text" placeholder="Full Legal Name" value={fullName} onChange={e=>setFullName(e.target.value)} className="w-full border rounded-md px-3 py-2"/><input type="date" value={dob} onChange={e=>setDob(e.target.value)} className="w-full border rounded-md px-3 py-2"/><input type="email" placeholder="Email Address" value={email} onChange={e=>setEmail(e.target.value)} className="w-full border rounded-md px-3 py-2"/><input type="tel" placeholder="Phone Number" value={phone} onChange={e=>setPhone(e.target.value)} className="w-full border rounded-md px-3 py-2"/><select value={contactMethod} onChange={e=>setContactMethod(e.target.value)} className="w-full border rounded-md px-3 py-2"><option value="">Preferred Contact Method</option><option value="Phone">Phone</option><option value="Email">Email</option><option value="Text">Text</option></select></div>
+    {config&&<div className="space-y-4 mb-10"><h2 className="text-xl font-bold text-gray-800">Record Details</h2>{config.requiresCaseNumber&&<input type="text" placeholder="Case Number" value={caseNumber} onChange={e=>setCaseNumber(e.target.value)} className="w-full border rounded-md px-3 py-2"/>}{config.requiresCounty&&<input type="text" placeholder="County of Conviction" value={county} onChange={e=>setCounty(e.target.value)} className="w-full border rounded-md px-3 py-2"/>}<input type="number" placeholder="Year of Conviction" value={year} onChange={e=>setYear(e.target.value)} className="w-full border rounded-md px-3 py-2"/><input type="text" placeholder="Charge" value={charge} onChange={e=>setCharge(e.target.value)} className="w-full border rounded-md px-3 py-2"/><input type="text" placeholder="Disposition" value={disposition} onChange={e=>setDisposition(e.target.value)} className="w-full border rounded-md px-3 py-2"/></div>}
+    {config&&<div className="mb-10"><h2 className="text-xl font-bold text-gray-800 mb-4">Eligibility Flags</h2>{(Object.keys(flags) as (keyof Flags)[]).map(key=><label key={key} className="flex items-center gap-3 mb-2"><input type="checkbox" checked={flags[key]} onChange={()=>setFlags(prev=>({...prev,[key]:!prev[key]}))}/><span className="capitalize">{key.replace(/([A-Z])/g," $1")}</span></label>)}</div>}
+    <div className="mb-10"><h2 className="text-xl font-bold text-gray-800 mb-4">Electronic Signature</h2><p className="text-sm text-gray-600 mb-3">Sign below using your mouse or finger.</p><SignaturePad onChange={setSignature}/></div>
+    <label className="flex items-start gap-3 mb-6 text-sm text-gray-700"><input type="checkbox" checked={acknowledged} onChange={e=>setAcknowledged(e.target.checked)} className="mt-1"/><span>I understand that My-Clean-Slate is an automated document generation system, not a law firm; that it does not provide legal advice; and that no attorney-client relationship is created. I have read the <a href="/terms" className="underline" target="_blank" rel="noopener noreferrer">Terms of Service</a> and <a href="/privacy" className="underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label>
+    <button onClick={handleSubmit} disabled={!serviceType||!selectedState||!signature||!acknowledged} className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg shadow disabled:opacity-50">Continue to Checkout</button>
+  </div></main>;
 }
