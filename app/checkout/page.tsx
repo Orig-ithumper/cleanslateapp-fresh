@@ -19,7 +19,7 @@ type IntakePayload = {
   year: string;
   charge: string;
   disposition: string;
-  signature: string | null;  
+  signature: string | null;
   flags: Record<string, boolean>;
 };
 
@@ -56,6 +56,7 @@ function CheckoutPageInner() {
     if (!data) return;
     setSubmitting(true);
     setSubmitError(null);
+
     try {
       const res = await fetch("/api/checkout", {
         method: "POST",
@@ -116,61 +117,65 @@ function CheckoutPageInner() {
   const serviceFee = Number(data.serviceFee) || 0;
   const totalDue = serviceFee;
 
+  const rowClass = "grid grid-cols-[220px_1fr] gap-x-6 gap-y-2 text-sm items-baseline";
+  const labelClass = "text-gray-500";
+  const valueClass = "text-gray-900 min-w-0 break-words";
+
   return (
     <main className="min-h-screen bg-gray-50 py-10 px-4">
       <div className="max-w-2xl mx-auto bg-white shadow-md rounded-lg p-8">
         <h1 className="text-3xl font-extrabold text-indigo-700 mb-2">
-          Review &amp; Checkout
+          Review & Checkout
         </h1>
         <p className="text-gray-600 mb-8">
           Please confirm your details before proceeding to payment.
         </p>
 
         <section className="mb-8">
-          <h2 className="text-lg font-bold text-gray-800 mb-3">State &amp; Filing</h2>
-          <dl className="grid grid-cols-2 gap-y-2 text-sm">
-            <dt className="text-gray-500">Service</dt>
-            <dd>{data.serviceType || "—"}</dd>
-            <dt className="text-gray-500">State</dt>
-            <dd>{data.state}</dd>
-            <dt className="text-gray-500">Estimated Court Filing Fee</dt>
-            <dd>{courtFee === 0 ? "None" : "$" + courtFee.toFixed(2)}</dd>
-            <dt className="text-gray-500">Waiver Available</dt>
-            <dd>{data.waiver === "true" ? "Yes" : "No"}</dd>
-            <dt className="text-gray-500">Service Fee</dt>
-            <dd>${serviceFee.toFixed(2)}</dd>
+          <h2 className="text-lg font-bold text-gray-800 mb-3">State & Filing</h2>
+          <dl className={rowClass}>
+            <dt className={labelClass}>Service</dt>
+            <dd className={valueClass}>{data.serviceType || "—"}</dd>
+            <dt className={labelClass}>State</dt>
+            <dd className={valueClass}>{data.state || "—"}</dd>
+            <dt className={labelClass}>Estimated Court Filing Fee</dt>
+            <dd className={valueClass}>{courtFee === 0 ? "None" : "$" + courtFee.toFixed(2)}</dd>
+            <dt className={labelClass}>Waiver Available</dt>
+            <dd className={valueClass}>{data.waiver === "true" ? "Yes" : "No"}</dd>
+            <dt className={labelClass}>Service Fee</dt>
+            <dd className={valueClass}>${serviceFee.toFixed(2)}</dd>
             <dt className="text-gray-700 font-semibold border-t pt-2 mt-1">Service Fee Due Now</dt>
-            <dd className="font-semibold border-t pt-2 mt-1">${totalDue.toFixed(2)}</dd>
+            <dd className="font-semibold text-gray-900 border-t pt-2 mt-1">${totalDue.toFixed(2)}</dd>
           </dl>
         </section>
 
         <section className="mb-8">
           <h2 className="text-lg font-bold text-gray-800 mb-3">Personal Information</h2>
-          <dl className="grid grid-cols-2 gap-y-2 text-sm">
-            <dt className="text-gray-500">Full Name</dt>
-            <dd>{data.fullName || "—"}</dd>
-            <dt className="text-gray-500">Date of Birth</dt>
-            <dd>{data.dob || "—"}</dd>
-            <dt className="text-gray-500">Email</dt>
-            <dd>{data.email || "—"}</dd>
-            <dt className="text-gray-500">Phone</dt>
-            <dd>{data.phone || "—"}</dd>
+          <dl className={rowClass}>
+            <dt className={labelClass}>Full Name</dt>
+            <dd className={valueClass}>{data.fullName || "—"}</dd>
+            <dt className={labelClass}>Date of Birth</dt>
+            <dd className={valueClass}>{data.dob || "—"}</dd>
+            <dt className={labelClass}>Email</dt>
+            <dd className={valueClass}>{data.email || "—"}</dd>
+            <dt className={labelClass}>Phone</dt>
+            <dd className={valueClass}>{data.phone || "—"}</dd>
           </dl>
         </section>
 
         <section className="mb-8">
           <h2 className="text-lg font-bold text-gray-800 mb-3">Record Details</h2>
-          <dl className="grid grid-cols-2 gap-y-2 text-sm">
-            <dt className="text-gray-500">Case Number</dt>
-            <dd>{data.caseNumber || "—"}</dd>
-            <dt className="text-gray-500">County</dt>
-            <dd>{data.county || "—"}</dd>
-            <dt className="text-gray-500">Year</dt>
-            <dd>{data.year || "—"}</dd>
-            <dt className="text-gray-500">Charge</dt>
-            <dd>{data.charge || "—"}</dd>
-            <dt className="text-gray-500">Disposition</dt>
-            <dd>{data.disposition || "—"}</dd>
+          <dl className={rowClass}>
+            <dt className={labelClass}>Case Number</dt>
+            <dd className={valueClass}>{data.caseNumber || "—"}</dd>
+            <dt className={labelClass}>County</dt>
+            <dd className={valueClass}>{data.county || "—"}</dd>
+            <dt className={labelClass}>Year</dt>
+            <dd className={valueClass}>{data.year || "—"}</dd>
+            <dt className={labelClass}>Charge</dt>
+            <dd className={valueClass}>{data.charge || "—"}</dd>
+            <dt className={labelClass}>Disposition</dt>
+            <dd className={valueClass}>{data.disposition || "—"}</dd>
           </dl>
         </section>
 
@@ -186,9 +191,11 @@ function CheckoutPageInner() {
         )}
 
         <LegalDisclosure className="mb-4" />
+
         {submitError && (
           <p className="text-red-600 text-sm mb-3">{submitError}</p>
         )}
+
         <button
           className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg shadow disabled:opacity-50"
           disabled={submitting}
@@ -196,8 +203,9 @@ function CheckoutPageInner() {
         >
           {submitting ? "Processing…" : "Pay $" + totalDue.toFixed(2) + " & Submit"}
         </button>
+
         <p className="mt-3 text-xs text-gray-500 text-center">
-          By clicking Pay &amp; Submit you agree to our{" "}
+          By clicking Pay & Submit you agree to our{" "}
           <a href="/terms" className="underline">Terms of Service</a> and{" "}
           <a href="/privacy" className="underline">Privacy Policy</a>, and acknowledge that
           My-Clean-Slate is not a law firm and does not provide legal advice.
